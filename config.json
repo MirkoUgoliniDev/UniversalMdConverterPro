@@ -1,0 +1,49 @@
+{
+    "ai_provider": "Google Gemini",
+    "api_key_gemini": "",
+    "api_key_openai": "",
+    "pref_model_gemini": "gemini-2.0-flash",
+    "pref_model_openai": "gpt-4o",
+    "last_url": "https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/network/esp_now.html",
+    "mode_web": "Smart Filter",
+    "kw_web_good": [
+        "manual",
+        "guide",
+        "docs",
+        "api",
+        "reference",
+        "datasheet",
+        "chapter"
+    ],
+    "kw_web_bad": [
+        "login",
+        "signup",
+        "facebook",
+        "privacy",
+        "cart",
+        "shop",
+        "price",
+        "twitter"
+    ],
+    "prompt_web": "Sei un crawler tecnico. Pagina corrente: {context_url}.\nLink trovati: {links_text}\nOBIETTIVO: Seleziona SOLO i link per scaricare Documentazione Tecnica, Manuali, API.\nIGNORA: Login, Social, Home, Privacy.\nRISPOSTA: Array JSON di stringhe (URL). Esempio: [\"/docs/intro\", \"/manual.pdf\"]",
+    "verb_web": "Dettagliato",
+    "mode_pdf": "Raw Text (Veloce)",
+    "kw_pdf_good": [
+        "chapter",
+        "capitolo",
+        "introduction",
+        "overview",
+        "technical",
+        "specifications"
+    ],
+    "kw_pdf_bad": [
+        "copyright",
+        "all rights reserved",
+        "blank page",
+        "advertisement",
+        "indice",
+        "index"
+    ],
+    "prompt_pdf": "Sei un esperto formattatore. Pulisci questo testo estratto da un PDF (Pagina {page_num}).\nCOMPITI:\n1. Formatta in Markdown pulito.\n2. Rimuovi intestazioni e pi\u00e8 di pagina ripetuti.\n3. Unisci frasi spezzate.\n4. Restituisci SOLO il markdown.\nTESTO:\n{raw_text}",
+    "verb_pdf": "Normale"
+}

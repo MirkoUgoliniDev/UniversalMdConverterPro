@@ -11,7 +11,7 @@ from markdownify import markdownify as md
 from urllib.parse import urljoin, urlparse
 import fitz  # PyMuPDF
 
-# IMPORT DEI NOSTRI MODULI
+# IMPORT MODULI INTERNI
 from settings import ConfigManager
 from utils import clean_filename, get_unique_filepath, heuristic_score
 from ai_engine import AIEngine
@@ -22,10 +22,11 @@ class UniversalConverterApp:
         self.root.title("Universal Converter Pro (Modular Architecture)")
         self.root.geometry("1100x950")
         
-        # Inizializza Moduli
-        self.cfg = ConfigManager()
+        # 1. Inizializza Moduli (Configurazione e AI)
+        self.cfg = ConfigManager() # Carica automaticamente settings.json e .secrets.json
         self.ai = AIEngine()
         
+        # Variabili di stato
         self.is_running = False
         self.visited_urls = set()
         self.pdf_files_to_convert = []
@@ -43,16 +44,18 @@ class UniversalConverterApp:
         self.tab_settings = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_settings, text="⚙️ Impostazioni")
         
+        # Costruzione Interfaccia
         self.setup_settings_tab()
         self.setup_crawler_tab()
         self.setup_pdf_tab()
         self.setup_log_area()
         
-        # Load UI state from config
+        # Carica stato precedente dalla configurazione
         self.load_ui_from_config()
 
     # ================= UI HELPERS =================
     def create_icon_button(self, parent, text, command):
+        """Crea un pulsante piatto (flat) con icona emoji"""
         return tk.Button(parent, text=text, font=("Segoe UI Emoji", 11), command=command,
                         relief="flat", bd=0, bg="#f0f0f0", activebackground="#e0e0e0", 
                         cursor="hand2", padx=4, pady=2, overrelief="groove")
@@ -77,29 +80,36 @@ class UniversalConverterApp:
     def setup_settings_tab(self):
         main_frame = ttk.Frame(self.tab_settings, padding=20); main_frame.pack(fill="both", expand=True)
         
-        # Global AI
+        # Global AI Config
         global_frame = ttk.LabelFrame(main_frame, text="🌎 Configurazione Motore AI", padding=15)
         global_frame.pack(fill="x", pady=10); global_frame.columnconfigure(1, weight=1)
         
+        # Provider
         ttk.Label(global_frame, text="Provider AI:").grid(row=0, column=0, sticky="w")
         self.provider_combo = ttk.Combobox(global_frame, values=["Google Gemini", "OpenAI (GPT)"], state="readonly", width=25)
         self.provider_combo.grid(row=0, column=1, sticky="w", padx=5, pady=5)
         self.provider_combo.bind("<<ComboboxSelected>>", self.update_provider_ui)
 
-        ttk.Label(global_frame, text="API Key:").grid(row=1, column=0, sticky="w")
-        self.key_entry = ttk.Entry(global_frame, show="*"); self.key_entry.grid(row=1, column=1, sticky="ew", padx=5)
+        # API Key
+        self.lbl_key = ttk.Label(global_frame, text="API Key:")
+        self.lbl_key.grid(row=1, column=0, sticky="w")
+        
+        self.frame_keys = ttk.Frame(global_frame); self.frame_keys.grid(row=1, column=1, sticky="ew", padx=5); self.frame_keys.columnconfigure(0, weight=1)
+        self.gemini_key_entry = ttk.Entry(self.frame_keys, show="*"); self.gemini_key_entry.grid(row=0, column=0, sticky="ew")
+        self.openai_key_entry = ttk.Entry(self.frame_keys, show="*") # Hidden by default
         
         ctrl_frame = ttk.Frame(global_frame); ctrl_frame.grid(row=1, column=2, padx=5, sticky="e")
         self.show_key_var = tk.BooleanVar()
         ttk.Checkbutton(ctrl_frame, text="Show", variable=self.show_key_var, 
-                       command=lambda: self.key_entry.config(show="" if self.show_key_var.get() else "*")).pack(side="left")
+                       command=self.toggle_key_visibility).pack(side="left")
         self.create_icon_button(ctrl_frame, "🔑", self.open_api_link).pack(side="left", padx=5)
 
+        # Modello
         ttk.Label(global_frame, text="Modello Attivo:").grid(row=2, column=0, sticky="w", pady=10)
         self.model_combo = ttk.Combobox(global_frame, state="normal"); self.model_combo.grid(row=2, column=1, sticky="ew", padx=5)
         self.create_icon_button(global_frame, "🔄", self.fetch_models_ui).grid(row=2, column=2, sticky="e", padx=5)
 
-        # Web & PDF Buttons
+        # Sezioni Web & PDF (Pulsanti Modifica)
         web_frame = ttk.LabelFrame(main_frame, text="🌍 Web Config", padding=15); web_frame.pack(fill="x", pady=10)
         web_frame.columnconfigure(1, weight=1); web_frame.columnconfigure(3, weight=1)
         ttk.Label(web_frame, text="Filtro Smart:").grid(row=0, column=0, sticky="w")
@@ -135,15 +145,26 @@ class UniversalConverterApp:
 
     # ================= LOGICA UI =================
     def save_all_config(self):
-        # Update config object from UI
+        # Salva provider
         self.cfg.set("ai_provider", self.provider_combo.get())
         
+        # Salva chiavi e modelli preferiti
         provider = self.provider_combo.get()
-        key = self.key_entry.get().strip()
-        if "Gemini" in provider: self.cfg.set("api_key_gemini", key); self.cfg.set("pref_model_gemini", self.model_combo.get())
-        else: self.cfg.set("api_key_openai", key); self.cfg.set("pref_model_openai", self.model_combo.get())
         
-        # Save other tabs settings
+        # Recupera chiavi dalle entry
+        key_gem = self.gemini_key_entry.get().strip()
+        key_gpt = self.openai_key_entry.get().strip()
+        
+        self.cfg.set("api_key_gemini", key_gem)
+        self.cfg.set("api_key_openai", key_gpt)
+
+        # Salva modello preferito per il provider attivo
+        if "Gemini" in provider:
+            self.cfg.set("pref_model_gemini", self.model_combo.get())
+        else:
+            self.cfg.set("pref_model_openai", self.model_combo.get())
+        
+        # Salva impostazioni UI dei tab
         self.cfg.set("last_url", self.url_entry.get().strip())
         self.cfg.set("mode_web", self.crawler_mode_combo.get())
         self.cfg.set("verb_web", self.crawler_verb_combo.get())
@@ -155,7 +176,12 @@ class UniversalConverterApp:
 
     def load_ui_from_config(self):
         self.provider_combo.set(self.cfg.get("ai_provider"))
-        self.update_provider_ui() # Sets Key and Model from config
+        
+        # Carica chiavi nelle entry (anche se nascoste)
+        self.gemini_key_entry.insert(0, self.cfg.get("api_key_gemini"))
+        self.openai_key_entry.insert(0, self.cfg.get("api_key_openai"))
+        
+        self.update_provider_ui() # Imposta visibilità e modello
         
         self.url_entry.delete(0, tk.END); self.url_entry.insert(0, self.cfg.get("last_url"))
         self.crawler_mode_combo.set(self.cfg.get("mode_web"))
@@ -166,28 +192,41 @@ class UniversalConverterApp:
     def update_provider_ui(self, event=None):
         provider = self.provider_combo.get()
         if "Gemini" in provider:
-            self.key_entry.delete(0, tk.END); self.key_entry.insert(0, self.cfg.get("api_key_gemini"))
+            self.openai_key_entry.grid_remove()
+            self.gemini_key_entry.grid(row=0, column=0, sticky="ew")
+            self.lbl_key.config(text="Gemini Key:")
             self.model_combo.set(self.cfg.get("pref_model_gemini"))
         else:
-            self.key_entry.delete(0, tk.END); self.key_entry.insert(0, self.cfg.get("api_key_openai"))
+            self.gemini_key_entry.grid_remove()
+            self.openai_key_entry.grid(row=0, column=0, sticky="ew")
+            self.lbl_key.config(text="OpenAI Key:")
             self.model_combo.set(self.cfg.get("pref_model_openai"))
 
     def fetch_models_ui(self):
         provider = self.provider_combo.get()
-        key = self.key_entry.get().strip()
+        # Prendi la chiave corretta in base al provider attivo
+        key = self.gemini_key_entry.get().strip() if "Gemini" in provider else self.openai_key_entry.get().strip()
+        
         self.log(f"Recupero modelli {provider}...")
         models = self.ai.get_available_models(provider, key)
+        
         if models:
             self.model_combo['values'] = models
             self.model_combo.current(0)
             messagebox.showinfo("OK", f"Trovati {len(models)} modelli")
         else:
-            self.log(f"Errore: {self.ai.last_error}")
-            messagebox.showerror("Errore", self.ai.last_error)
+            err = self.ai.last_error if self.ai.last_error else "Chiave non valida o errore connessione"
+            self.log(f"Errore: {err}")
+            messagebox.showerror("Errore", err)
 
     def open_api_link(self):
         url = "https://aistudio.google.com/app/apikey" if "Gemini" in self.provider_combo.get() else "https://platform.openai.com/api-keys"
         webbrowser.open(url, new=2)
+    
+    def toggle_key_visibility(self):
+        show = "" if self.show_key_var.get() else "*"
+        self.gemini_key_entry.config(show=show)
+        self.openai_key_entry.config(show=show)
 
     # ================= PROCESS CRAWLER =================
     def setup_crawler_tab(self):
@@ -241,33 +280,30 @@ class UniversalConverterApp:
                     if content:
                         fname = clean_filename(soup.title.string or "page") + ".md"
                         with open(get_unique_filepath(out, fname), "w", encoding="utf-8") as f:
-                            f.write(f"# {curr}\n\n{md(str(content))}")
+                            f.write(f"# {curr}\n\n{md(str(content), heading_style='ATX')}")
                         self.log(f"[OK] Salvato: {fname}")
                         
                         if depth < int(self.depth_spinbox.get()):
                             links = [{"text": a.get_text(strip=True)[:50], "href": urljoin(curr, a['href']).split("#")[0]} 
                                      for a in content.find_all('a', href=True)]
-                            # Filtering Logic
+                            
                             valid_links = []
                             if use_ai:
                                 if verbose: self.log(f"   ⬆️ AI Analisi {len(links)} link...")
                                 prompt = self.cfg.get("prompt_web").replace("{context_url}", curr).replace("{links_text}", json.dumps(links[:80]))
+                                
                                 provider = self.provider_combo.get()
-                                key = self.key_entry.get()
+                                key = self.gemini_key_entry.get() if "Gemini" in provider else self.openai_key_entry.get()
                                 model = self.model_combo.get()
                                 
                                 resp = self.ai.ask_ai(provider, key, model, prompt)
                                 if resp:
                                     try:
-                                        # Clean JSON
                                         if "```json" in resp: resp = resp.split("```json")[1].split("```")[0]
                                         selected = json.loads(resp)
-                                        # Find matching objs
                                         for l in links:
-                                            if l['href'] in selected or l['text'] in selected:
-                                                valid_links.append(l)
-                                            else:
-                                                self.log_discard(f"[AI] Scartato: {l['text']}")
+                                            if l['href'] in selected or l['text'] in selected: valid_links.append(l)
+                                            else: self.log_discard(f"[AI] Scartato: {l['text']}")
                                     except: self.log("Errore JSON AI")
                             else:
                                 for l in links:
@@ -275,10 +311,8 @@ class UniversalConverterApp:
                                     if score > 0: valid_links.append(l)
                                     else: self.log_discard(f"[Smart] Scartato: {l['text']} (Score: {score})")
                             
-                            # Enqueue
                             for l in valid_links:
                                 if l['href'] not in self.visited_urls:
-                                    # Domain check
                                     if self.restrict_var.get() and urlparse(l['href']).netloc != urlparse(url).netloc: continue
                                     self.visited_urls.add(l['href']); queue.append((l['href'], depth + 1))
                             
@@ -337,8 +371,13 @@ class UniversalConverterApp:
                             if score < 0: write=False; self.log_discard(f"Pagina {i+1} scartata")
                         elif use_ai:
                             if verbose: self.log(f"   🤖 AI Pag {i+1}...")
+                            
                             prompt = self.cfg.get("prompt_pdf").replace("{page_num}", str(i+1)).replace("{raw_text}", raw)
-                            resp = self.ai.ask_ai(self.provider_combo.get(), self.key_entry.get(), self.model_combo.get(), prompt)
+                            provider = self.provider_combo.get()
+                            key = self.gemini_key_entry.get() if "Gemini" in provider else self.openai_key_entry.get()
+                            model = self.model_combo.get()
+                            
+                            resp = self.ai.ask_ai(provider, key, model, prompt)
                             if resp: final = resp
                             else: self.log_discard(f"AI fallita pag {i+1}, uso raw")
                             time.sleep(3)
@@ -380,19 +419,3 @@ class UniversalConverterApp:
         for f in fs: self.pdf_listbox.insert("end", os.path.basename(f))
     def clear_pdfs(self): self.pdf_files_to_convert = []; self.pdf_listbox.delete(0, "end")
     def stop_process(self): self.is_running = False; self.log("!!! STOP RICHIESTO !!!")
-
-# ================= 5. src/main.py =================
-# Basta importare ed eseguire
-from app_ui import UniversalConverterApp
-if __name__ == "__main__":
-    root = tk.Tk()
-    # Tema opzionale per renderlo più bello su Windows
-    try:
-        root.tk.call("source", "azure.tcl") # Se hai un tema
-        root.tk.call("set_theme", "light")
-    except: pass
-    
-    style = ttk.Style()
-    style.theme_use('clam') 
-    app = UniversalConverterApp(root)
-    root.mainloop()

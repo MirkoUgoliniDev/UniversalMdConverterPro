@@ -2,14 +2,16 @@ import json
 import os
 
 class ConfigManager:
-    def __init__(self, config_file="config.json"):
-        self.config_file = config_file
+    def __init__(self):
+        # File pubblici (Configurazione UI, Prompt, Keywords) -> VA SU GITHUB
+        self.settings_file = "settings.json"
         
-        # DEFAULTS
+        # File privati (API Keys) -> NON VA SU GITHUB (va in .gitignore)
+        self.secrets_file = ".secrets.json"
+        
+        # DEFAULTS (Configurazione Base)
         self.defaults = {
             "ai_provider": "Google Gemini",
-            "api_key_gemini": "",
-            "api_key_openai": "",
             "pref_model_gemini": "gemini-2.0-flash",
             "pref_model_openai": "gpt-4o",
             "last_url": "",
@@ -36,29 +38,60 @@ TESTO:
 {raw_text}"""
         }
         
-        # Dati correnti
-        self.data = self.defaults.copy()
+        # DEFAULTS SECRETS (Chiavi vuote)
+        self.defaults_secrets = {
+            "api_key_gemini": "",
+            "api_key_openai": ""
+        }
+        
+        # Dizionario in memoria che unisce tutto
+        self.data = {}
         self.load()
 
     def load(self):
-        if os.path.exists(self.config_file):
+        # 1. Carica Settings Pubblici
+        self.data = self.defaults.copy()
+        if os.path.exists(self.settings_file):
             try:
-                with open(self.config_file, "r") as f:
-                    loaded = json.load(f)
-                    # Aggiorna i default con i dati caricati (mantiene chiavi nuove se aggiunte in futuro)
-                    self.data.update(loaded)
+                with open(self.settings_file, "r") as f:
+                    self.data.update(json.load(f))
             except Exception as e:
-                print(f"Errore caricamento config: {e}")
+                print(f"Errore caricamento settings: {e}")
+
+        # 2. Carica Segreti (Se esistono)
+        secrets_data = self.defaults_secrets.copy()
+        if os.path.exists(self.secrets_file):
+            try:
+                with open(self.secrets_file, "r") as f:
+                    secrets_data.update(json.load(f))
+            except Exception as e:
+                print(f"Errore caricamento secrets: {e}")
+        
+        # Unisci i segreti nei dati in memoria
+        self.data.update(secrets_data)
 
     def save(self):
+        # Separa i dati in due dizionari prima di salvare
+        settings_to_save = {k: v for k, v in self.data.items() if k not in ["api_key_gemini", "api_key_openai"]}
+        secrets_to_save = {
+            "api_key_gemini": self.data.get("api_key_gemini", ""),
+            "api_key_openai": self.data.get("api_key_openai", "")
+        }
+
         try:
-            with open(self.config_file, "w") as f:
-                json.dump(self.data, f, indent=4)
+            # Salva settings.json (Pubblico)
+            with open(self.settings_file, "w") as f:
+                json.dump(settings_to_save, f, indent=4)
+            
+            # Salva .secrets.json (Privato)
+            with open(self.secrets_file, "w") as f:
+                json.dump(secrets_to_save, f, indent=4)
+                
         except Exception as e:
             print(f"Errore salvataggio config: {e}")
 
     def get(self, key):
-        return self.data.get(key, self.defaults.get(key))
+        return self.data.get(key, self.defaults.get(key, ""))
 
     def set(self, key, value):
         self.data[key] = value

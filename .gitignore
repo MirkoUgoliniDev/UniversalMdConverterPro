@@ -8,7 +8,7 @@ __pycache__/
 *.pyc
 
 # Ignora file di configurazione con PASSWORD/KEY
-config.json
+.secrets.json
 
 # Ignora cartelle di output (opzionale, se non vuoi caricare i file scaricati)
 data/docs_web/
