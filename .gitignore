@@ -1,0 +1,18 @@
+# Ignora ambiente virtuale (pesante)
+.venv/
+venv/
+env/
+
+# Ignora file temporanei Python
+__pycache__/
+*.pyc
+
+# Ignora file di configurazione con PASSWORD/KEY
+config.json
+
+# Ignora cartelle di output (opzionale, se non vuoi caricare i file scaricati)
+data/docs_web/
+data/docs_pdf/
+
+# Ignora file di sistema
+.DS_Store

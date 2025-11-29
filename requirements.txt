@@ -1,0 +1,6 @@
+requests
+beautifulsoup4
+markdownify
+pymupdf
+google-generativeai
+openai
